@@ -25,8 +25,8 @@ class Agent():
     """ Interacts with and learns from the environment """
 
     def __init__(self, state_size = 4*4, action_size = 4, seed = 42,
-                 fc1_units=256, fc2_units=256, fc3_units=256, 
-                 buffer_size = BUFFER_SIZE, batch_size = BATCH_SIZE, 
+                 fc1_units=256, fc2_units=256, fc3_units=256,
+                 buffer_size = BUFFER_SIZE, batch_size = BATCH_SIZE,
                  lr = LR, use_expected_rewards = True, predict_steps = 2,
                  gamma = GAMMA, tau = TAU):
         """Initialize an Agent object.
@@ -42,11 +42,11 @@ class Agent():
             lr (float): learning rate
             use_expected_rewards (bool): whether to predict the weighted sum of future rewards or just for current step
             predict_steps (int): for how many steps to predict the expected rewards
-            
+
         """
         TAU = tau
         GAMMA = gamma
-        
+
         self.state_size = state_size
         self.action_size = action_size
         self.seed = seed
@@ -56,7 +56,7 @@ class Agent():
         self.losses = []
         self.use_expected_rewards = use_expected_rewards
         self.current_iteration = 0
-        
+
         # Game scores
         self.scores_list = []
         self.last_n_scores = deque(maxlen=50)
@@ -86,7 +86,7 @@ class Agent():
         self.max_steps = 0
         self.total_steps = 0
         self.best_steps_board = []
-        
+
         self.actions_avg_list = []
         self.actions_deque = {
             0:deque(maxlen=50),
@@ -99,7 +99,7 @@ class Agent():
         self.qnetwork_local = QNetwork(state_size, action_size, seed, fc1_units=fc1_units, fc2_units=fc2_units, fc3_units = fc3_units).to(device)
         self.qnetwork_target = QNetwork(state_size, action_size, seed, fc1_units=fc1_units, fc2_units=fc2_units, fc3_units = fc3_units).to(device)
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=lr)
-        lr_s = lambda epoch: 0.998 ** (epoch % 1000) if epoch < 100000 else 0.999 ** (epoch % 1000) 
+        lr_s = lambda epoch: 0.998 ** (epoch % 1000) if epoch < 100000 else 0.999 ** (epoch % 1000)
         self.lr_decay = optim.lr_scheduler.StepLR(self.optimizer, 1000, 0.9999)
 
         # Replay buffer
@@ -111,12 +111,12 @@ class Agent():
 
     def save(self, name):
         """Saves the state of the model and stats
-        
+
         Params
         ======
             name (str): name of the agent version used in dqn function
         """
-        
+
         torch.save(self.qnetwork_local.state_dict(), base_dir+'/network_local_%s.pth' % name)
         torch.save(self.qnetwork_target.state_dict(), base_dir+'/network_target_%s.pth' % name)
         torch.save(self.optimizer.state_dict(), base_dir+'/optimizer_%s.pth' % name)
@@ -129,7 +129,7 @@ class Agent():
             'losses': self.losses,
             'use_expected_rewards': self.use_expected_rewards,
             'current_iteration': self.current_iteration,
-        
+
         # Game scores
             'scores_list': self.scores_list,
             'last_n_scores': self.last_n_scores,
@@ -159,7 +159,7 @@ class Agent():
             'max_steps': self.max_steps,
             'total_steps': self.total_steps,
             'best_steps_board': self.best_steps_board,
-        
+
             'actions_avg_list': self.actions_avg_list,
             'actions_deque': self.actions_deque,
         # Replay buffer
@@ -174,7 +174,7 @@ class Agent():
 
     def load(self, name):
         """Saves the state of the model and stats
-        
+
         Params
         ======
             name (str): name of the agent version used in dqn function
@@ -183,7 +183,7 @@ class Agent():
         self.qnetwork_target.load_state_dict(torch.load(base_dir+'/network_target_%s.pth' % name))
         self.optimizer.load_state_dict(torch.load(base_dir + '/optimizer_%s.pth' % name))
         self.lr_decay.load_state_dict(torch.load(base_dir + '/lr_schd_%s.pth' % name))
-        
+
         with open(base_dir+'/agent_state_%s.pkl' % name, 'rb') as f:
             state = pickle.load(f)
 
@@ -196,7 +196,7 @@ class Agent():
         self.losses = state['losses']
         self.use_expected_rewards = state['use_expected_rewards']
         self.current_iteration = state['current_iteration']
-        
+
         # Game scores
         self.scores_list = state['scores_list']
         self.last_n_scores = state['last_n_scores']
@@ -226,20 +226,20 @@ class Agent():
         self.max_steps = state['max_steps']
         self.total_steps = state['total_steps']
         self.best_steps_board = state['best_steps_board']
-        
+
         self.actions_avg_list = state['actions_avg_list']
         self.actions_deque = state['actions_deque']
 
         # Replay buffer
         self.memory.load(state['memory'])
-        
+
         # Initialize time step
         self.t_step = state['t_step']
         self.steps_ahead = state['steps_ahead']
 
-        
+
     def step(self, state, action, reward, next_state, done, error, action_dist):
-        # Save experience in replay memory    
+        # Save experience in replay memory
         self.memory.add(state, action, reward, next_state, done, error, action_dist, None)
 
     def act(self, state, eps=0.):
@@ -257,31 +257,31 @@ class Agent():
         self.qnetwork_local.train()
 
         return action_values.cpu().data.numpy()
-        
+
     def learn(self, learn_iterations, mode = 'board_max', save_loss = True, gamma = GAMMA, weight = None):
-        
+
         if self.use_expected_rewards:
             self.memory.calc_expected_rewards(self.steps_ahead, weight)
-            
+
         self.memory.add_episode_experiences()
-        
+
         losses = []
-        
+
         if len(self.memory) > self.batch_size:
             if learn_iterations is None:
                 learn_iterations = self.learn_iterations
-        
+
             for i in range(learn_iterations):
 
                 states, actions, rewards, next_states, dones = self.memory.sample(mode=mode)
-                
+
                 # Get expected Q values from local model
                 Q_expected = self.qnetwork_local(states).gather(1, actions)
-                
+
 
                 # Compute loss
-                loss = F.mse_loss(Q_expected, rewards)
-                
+                loss = F.mse_loss(Q_expected, rewards).cpu()
+
                 losses.append(loss.detach().numpy())
 
                 # Minimize the loss
@@ -290,12 +290,12 @@ class Agent():
                 self.optimizer.step()
 
             self.lr_decay.step()
-            
+
             if save_loss:
                 self.losses.append(np.mean(losses))
         else:
             self.losses.append(0)
-                
+
     def soft_update(self, local_model, target_model, tau):
         """NOT USED ANYMORE
         Soft update model parameters.
@@ -325,10 +325,10 @@ class ReplayBuffer:
         """
         self.action_size = action_size
         self.memory = deque(maxlen=buffer_size)
-        
+
         self.episode_memory = []
         self.batch_size = batch_size
-        
+
         self.seed = random.seed(seed)
         self.experience = namedtuple("Experience", field_names=["state", "action", "reward", "next_state", "done", "error", "action_dist", "weight"])
         self.geomspaces = [np.geomspace(1., 0.5, i) for i in range(1, 10)]
@@ -357,7 +357,7 @@ class ReplayBuffer:
 
     def reset_episode_memory(self):
         self.episode_memory = []
-        
+
     def add(self, state, action, reward, next_state, done, error, action_dist, weight = None):
         """Add a new experience to memory."""
         e = self.experience(state, action, reward, next_state, done, error, action_dist, weight)
@@ -366,7 +366,7 @@ class ReplayBuffer:
     def add_episode_experiences(self):
         self.memory.extend(self.episode_memory)
         self.reset_episode_memory()
-        
+
     def calc_expected_rewards(self, steps_ahead = 1, weight = None):
 
         rewards = [e.reward for e in self.episode_memory if e is not None]
@@ -374,59 +374,59 @@ class ReplayBuffer:
         exp_rewards = [np.sum(rewards[i:i+steps_ahead] * self.geomspaces[steps_ahead-1]) for i in range(len(rewards) - steps_ahead)]
 
         temp_memory = []
-        
+
         for i, e in enumerate(self.episode_memory[:-steps_ahead]):
             t_e = self.experience(e.state, e.action, exp_rewards[i], e.next_state, e.done, e.error, e.action_dist, weight)
             temp_memory.append(t_e)
 
         self.episode_memory = temp_memory
-            
+
     def sample(self, mode='board_max'):
         """Randomly sample a batch of experiences from memory."""
-        
+
         if mode == 'random':
             experiences = random.sample(self.memory, k=self.batch_size)
         elif mode == 'board_max':
             probs = np.array([e.state.max() for e in self.memory])
             probs = probs / probs.sum()
             idx = np.random.choice(len(self.memory), size=self.batch_size, p=probs)
-            experiences = deque(maxlen=self.batch_size)        
+            experiences = deque(maxlen=self.batch_size)
             for i in idx:
                 experiences.append(self.memory[i])
-                
+
         elif mode == 'board_sum':
             probs = np.array([e.state.sum() for e in self.memory])
             probs = probs / probs.sum()
             idx = np.random.choice(len(self.memory), size=self.batch_size, p=probs)
-            experiences = deque(maxlen=self.batch_size)        
+            experiences = deque(maxlen=self.batch_size)
             for i in idx:
                 experiences.append(self.memory[i])
-                
+
         elif mode == 'reward':
             # Shifting by +1 is to keep steps with 0 reward in training set, otherwise they will receive 0 probability during sampling
-            probs = np.array([e.reward + 1 for e in self.memory]) 
+            probs = np.array([e.reward + 1 for e in self.memory])
             probs = probs / probs.sum()
             idx = np.random.choice(len(self.memory), size=self.batch_size, p=probs)
-            experiences = deque(maxlen=self.batch_size)        
+            experiences = deque(maxlen=self.batch_size)
             for i in idx:
                 experiences.append(self.memory[i])
-                
+
         elif mode == 'error':
             probs = np.array([e.error for e in self.memory])
             probs = probs / probs.sum()
             idx = np.random.choice(len(self.memory), size=self.batch_size, p=probs)
-            experiences = deque(maxlen=self.batch_size)        
+            experiences = deque(maxlen=self.batch_size)
             for i in idx:
                 experiences.append(self.memory[i])
-        
+
         elif mode == 'error_u':
             probs = np.array([e.error for e in self.memory])
             probs = probs / probs.sum()
             idx = np.random.choice(len(self.memory), size=self.batch_size, replace=False, p=probs)
-            experiences = deque(maxlen=self.batch_size)        
+            experiences = deque(maxlen=self.batch_size)
             for i in idx:
                 experiences.append(self.memory[i])
-        
+
         elif mode == 'weighted_error':
             weights = np.array([e.weight for e in self.memory])
             max_weight = weights.max()
@@ -436,10 +436,10 @@ class ReplayBuffer:
             probs = probs * weights
             probs = probs / probs.sum()
             idx = np.random.choice(len(self.memory), size=self.batch_size, p=probs)
-            experiences = deque(maxlen=self.batch_size)        
+            experiences = deque(maxlen=self.batch_size)
             for i in idx:
                 experiences.append(self.memory[i])
-        
+
         elif mode == 'weighted_error_reversed':
             weights = np.array([e.weight for e in self.memory])
             sum_weight = weights.sum()
@@ -448,28 +448,28 @@ class ReplayBuffer:
             probs = probs * weights
             probs = probs / probs.sum()
             idx = np.random.choice(len(self.memory), size=self.batch_size, p=probs)
-            experiences = deque(maxlen=self.batch_size)        
+            experiences = deque(maxlen=self.batch_size)
             for i in idx:
                 experiences.append(self.memory[i])
-        
+
         elif mode == 'action_balanced_error':
             probs = np.array([e.error * e.action_dist for e in self.memory])
             probs = probs / probs.sum()
             idx = np.random.choice(len(self.memory), size=self.batch_size, p=probs)
-            experiences = deque(maxlen=self.batch_size)        
+            experiences = deque(maxlen=self.batch_size)
             for i in idx:
                 experiences.append(self.memory[i])
-        
+
         elif mode == 'clipped_error':
             t = pd.DataFrame(self.memory)
-            
+
             t = t[t['error'] < t['error'].quantile(0.99)]
             t['probs'] = t['error'] * t['action_dist']
             t['probs'] = t['probs'] / t['probs'].sum()
             idx = np.random.choice(len(t), size=self.batch_size, p=t['probs'].values)
             t = t.iloc[idx]
-            
-            experiences = deque(maxlen=self.batch_size)        
+
+            experiences = deque(maxlen=self.batch_size)
             for i in list(t.itertuples(name='Experience', index=False)):
                 experiences.append(i)
 
