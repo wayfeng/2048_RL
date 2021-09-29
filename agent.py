@@ -5,7 +5,7 @@ import copy
 import time
 from collections import namedtuple, deque
 import pandas as pd
-from model import QNetwork
+from model import QNetwork, DQN
 
 import torch
 import torch.nn.functional as F
@@ -15,7 +15,6 @@ BUFFER_SIZE = 100000    # replay buffer size
 BATCH_SIZE = 1024       # minibatch size
 GAMMA = 0.99            # discount factor
 LR = 0.00005            # learning rate
-TAU = 0.001             # for soft update of target parameters
 
 base_dir = './data/'
 
@@ -28,7 +27,7 @@ class Agent():
                  fc1_units=256, fc2_units=256, fc3_units=256,
                  buffer_size = BUFFER_SIZE, batch_size = BATCH_SIZE,
                  lr = LR, use_expected_rewards = True, predict_steps = 2,
-                 gamma = GAMMA, tau = TAU):
+                 gamma = GAMMA):
         """Initialize an Agent object.
 
         Params
@@ -44,7 +43,6 @@ class Agent():
             predict_steps (int): for how many steps to predict the expected rewards
 
         """
-        TAU = tau
         GAMMA = gamma
 
         self.state_size = state_size
@@ -96,8 +94,8 @@ class Agent():
         }
 
         # Q-Network
-        self.qnetwork_local = QNetwork(state_size, action_size, seed, fc1_units=fc1_units, fc2_units=fc2_units, fc3_units = fc3_units).to(device)
-        self.qnetwork_target = QNetwork(state_size, action_size, seed, fc1_units=fc1_units, fc2_units=fc2_units, fc3_units = fc3_units).to(device)
+        #self.qnetwork_local = QNetwork(state_size, action_size, seed, fc1_units=fc1_units).to(device)
+        self.qnetwork_local = DQN(action_size).to(device)
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=lr)
         lr_s = lambda epoch: 0.998 ** (epoch % 1000) if epoch < 100000 else 0.999 ** (epoch % 1000)
         self.lr_decay = optim.lr_scheduler.StepLR(self.optimizer, 1000, 0.9999)
@@ -118,7 +116,6 @@ class Agent():
         """
 
         torch.save(self.qnetwork_local.state_dict(), base_dir+'/network_local_%s.pth' % name)
-        torch.save(self.qnetwork_target.state_dict(), base_dir+'/network_target_%s.pth' % name)
         torch.save(self.optimizer.state_dict(), base_dir+'/optimizer_%s.pth' % name)
         torch.save(self.lr_decay.state_dict(), base_dir+'/lr_schd_%s.pth' % name)
         state = {
@@ -180,7 +177,6 @@ class Agent():
             name (str): name of the agent version used in dqn function
         """
         self.qnetwork_local.load_state_dict(torch.load(base_dir+'/network_local_%s.pth' % name))
-        self.qnetwork_target.load_state_dict(torch.load(base_dir+'/network_target_%s.pth' % name))
         self.optimizer.load_state_dict(torch.load(base_dir + '/optimizer_%s.pth' % name))
         self.lr_decay.load_state_dict(torch.load(base_dir + '/lr_schd_%s.pth' % name))
 
@@ -295,20 +291,6 @@ class Agent():
                 self.losses.append(np.mean(losses))
         else:
             self.losses.append(0)
-
-    def soft_update(self, local_model, target_model, tau):
-        """NOT USED ANYMORE
-        Soft update model parameters.
-        θ_target = τ*θ_local + (1 - τ)*θ_target
-
-        Params
-        ======
-            local_model (PyTorch model): weights will be copied from
-            target_model (PyTorch model): weights will be copied to
-            tau (float): interpolation parameter
-        """
-        for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
-            target_param.data.copy_(tau*local_param.data + (1.0-tau)*target_param.data)
 
 class ReplayBuffer:
     """Fixed-size buffer to store experience tuples."""
@@ -473,7 +455,7 @@ class ReplayBuffer:
             for i in list(t.itertuples(name='Experience', index=False)):
                 experiences.append(i)
 
-        states = torch.from_numpy(np.vstack([e.state for e in experiences if e is not None])).float().to(device)
+        states = torch.from_numpy(np.stack([e.state for e in experiences if e is not None])).float().to(device)
         actions = torch.from_numpy(np.vstack([e.action for e in experiences if e is not None])).long().to(device)
         rewards = torch.from_numpy(np.vstack([e.reward for e in experiences if e is not None])).float().to(device)
         next_states = torch.from_numpy(np.vstack([e.next_state for e in experiences if e is not None])).float().to(device)

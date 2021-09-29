@@ -103,9 +103,9 @@ class Game():
 
     def current_state(self):
         """ Returns a flattened array of board cell values """
-        return np.reshape(self.game_board.copy(), -1)
+        return self.game_board.copy() #np.reshape(self.game_board.copy(), -1)
 
-    def step(self, action, action_values):
+    def step(self, action):
         """ Applies the selected action to the board """
         old_board = self.game_board.copy()
         temp_board = self.game_board.copy()
@@ -149,7 +149,6 @@ class Game():
         # Save the new state
         self.history.append({
             'action': action,
-            'action_values': action_values,
             'old_board': old_board,
             'new_board': self.game_board.copy(),
             'score': self.score,
